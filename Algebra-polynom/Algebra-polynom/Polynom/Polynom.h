@@ -104,6 +104,8 @@ public:
     void operator=(const Polynom &other)
     {
         prime = other.getPrime();
+        if (head)
+            delete head;
         head = nullptr;
         PolyTerm *tmp = other.getHead();
         while (tmp)
@@ -189,7 +191,7 @@ public:
     /*! #7
 	* @brief This method calculates greatest common divisor of two polynoms
 	*/
-    Polynom gcd(Polynom p);
+    Polynom gcd(const Polynom& other);
 
     /* #9
     * @brief Equal operator
@@ -205,8 +207,9 @@ public:
     /*! #10
      * @author Hryshchenko Yurii
      * @brief Gets irreducible factors of nth cyclomotic polynomial using Ri polynomials
+     * @param amount If maxCount > 0, finds "maxCount" factors at most, otherwise finds all factors.
      */
-    std::vector<Polynom> factorizeCyclotomicRi(size_t n);
+    std::vector<Polynom> factorizeCyclotomicRi(size_t n, size_t maxCount = 0);
 
     /*! #12
      * @author Vladyslav Prokopchuk
@@ -299,6 +302,8 @@ protected:
     * @return basis polynomials
     */
     std::vector<Polynom> getComparisonSystemSolutionBasis() const;
+
+    std::vector<std::pair<Polynom, long long>> sort_polynomials_by_power(std::vector<std::pair<std::vector<Polynom>, long long>> const& polynomials) const;
 
     /*! @author Pashchenko Dmytro
     * @brief factorizes unmultiple factors using basis polynomials (f = Ï(gcd(f, h - a)))

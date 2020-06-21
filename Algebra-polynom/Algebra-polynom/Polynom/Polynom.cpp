@@ -436,6 +436,8 @@ std::pair<Polynom, Polynom> Polynom::simple_division(Polynom const &p1, Polynom 
     Polynom temp_1 = p1;
     Polynom temp_2 = p2;
     int count = 0;
+    long long power2 = temp_2.getPolyPower();
+    long long key = temp_2.getTermKey(power2);
     while (temp_1.getPolyPower() >= temp_2.getPolyPower()) {
         if (temp_1.getPolyPower() == 0) {
             if (count >= 1) {
@@ -444,11 +446,11 @@ std::pair<Polynom, Polynom> Polynom::simple_division(Polynom const &p1, Polynom 
             count++;
         }
         Polynom multiply(p1.getPrime(), std::vector<long long>{0});
-        multiply.addItem(multiply.makeItem(temp_1.getPolyPower() - temp_2.getPolyPower(),
+        multiply.addItem(multiply.makeItem(temp_1.getPolyPower() - power2,
                                            utils::division_for_numbers(temp_1.getTermKey(temp_1.getPolyPower()),
-                                                                       temp_2.getTermKey(temp_2.getPolyPower()),
+                                                                       key,
                                                                        p2.getPrime())));
-        temp_2 = temp_2.multPolyforDivide(temp_2, multiply);
+        temp_2 = temp_2* multiply;
         temp_1 = temp_1 - temp_2;
         temp_2 = p2;
         result = result + multiply;
@@ -513,21 +515,36 @@ long long Polynom::rootsNumber() {
 	}
 }
 
-Polynom Polynom::gcd(Polynom p2) {
-    Polynom p1(*this);
-    while (p1.getHead() != nullptr && p2.getHead() != nullptr) {
-        if (p1.getPolyPower() > p2.getPolyPower()) {
-            p1 = p1 % p2;
-        } else {
-            p2 = p2 % p1;
-        }
+Polynom Polynom::gcd(const Polynom& other) {
+    Polynom* p1;
+    Polynom* p2;
+    if (other.getPolyPower() >= this->getPolyPower()) {
+        p1 = new Polynom(other);
+	p2 = new Polynom(*this);
+    } else {
+        p1 = new Polynom(*this);
+	p2 = new Polynom(other);
+    }
+    //std::cout << "p1: " << p1->show() << std::endl;
+    //std::cout << "p2: " << p2->show() << std::endl;
+
+    while (p2->getHead() != nullptr) {
+        Polynom* temp = p2;
+	p2 = new Polynom(*p1 % *p2);
+	delete p1;
+	p1 = temp;
+
+    	//std::cout << "p1: " << p1->show() << std::endl;
+    	//std::cout << "p2: " << p2->show() << std::endl;
     }
 
-    if (p1.getHead() == nullptr) {
-        return p2;
-    }
+    Polynom result;
+    result = *p1;    
 
-    return p1;
+    delete p1;
+    delete p2;
+
+    return result;
 }
 
 /*9 This method calculates nth Cyclotomic polynomial*/
@@ -571,7 +588,6 @@ Polynom Polynom::CyclotomicPolynomial(int prime, int n) {
         }
     }
     else {
-        int mob;
         if (utils::isPrime(n))
             return Polynom(prime, std::vector<long long>(n, 1));
         for (int d = 1; d <= n; d++) {
@@ -597,9 +613,9 @@ Polynom Polynom::CyclotomicPolynomial(int prime, int n) {
 }
 
 /* 10 Factorization using Ri */
-std::vector<Polynom> Polynom::factorizeCyclotomicRi(size_t n) {
-	//std::cout << "Prime: " << prime << std::endl;
-	//std::cout << "Current: " << this->show() << std::endl;
+std::vector<Polynom> Polynom::factorizeCyclotomicRi(size_t n, size_t maxCount) {
+    //std::cout << "Prime: " << prime << std::endl;
+    //std::cout << "Current: " << this->show() << std::endl;
 	if (n == 1) {
 		return std::vector<Polynom> { Polynom(*this) };
 	}
@@ -634,27 +650,29 @@ std::vector<Polynom> Polynom::factorizeCyclotomicRi(size_t n) {
 	do {
 		d++;
 		dPow = (dPow * prime) % n;
-		//std::cout << "d = " << d << std::endl;
-		//std::cout << dPow << std::endl;
-	} while (dPow != 1);
-	
+        //std::cout << "d = " << d << std::endl;
+        //std::cout << dPow << std::endl;
+    } while (dPow != 1);
 
 	std::vector<Polynom> factors;
 	std::list<Polynom> polysToFactorize;
 	polysToFactorize.emplace_back(*this);
 
 	size_t factorsCount = utils::euler(n) / d;	
-	size_t factorPower = getPolyPower() / factorsCount;		
+    long long factorPower = getPolyPower() / factorsCount;
 	if (factorsCount == 1) {
 		factors.emplace_back(*this);
 		return factors;
 	}
-	//std::cout << "Factors count: " << factorsCount << std::endl;
-	//std::cout << "Factors power: " << factorPower << std::endl;
+    //std::cout << "Factors count: " << factorsCount << "(max: " << maxCount << std::endl;
+    if (maxCount > 0 && maxCount < factorsCount)
+        factorsCount = maxCount;
+    //std::cout << "Factors power: " << factorPower << std::endl;
 
 	size_t i = 1;
 	while (factors.size() < factorsCount) {
-		//std::cout << "Trying R" << i << std::endl;
+        //std::cout << "Trying R" << i << std::endl;
+        //std::cout << "Found " << factors.size() << " out of " << factorsCount << std::endl;
 		Polynom riPolynomial = Polynom(prime, std::vector<long long>());
 		long long j = 1;
 
@@ -663,6 +681,7 @@ std::vector<Polynom> Polynom::factorizeCyclotomicRi(size_t n) {
 
 		long long mod = n / utils::gcd(n, i);
 		while ((long long)std::pow(prime, j) % mod != 1) {
+            //std::cout << "trying " << j << std::endl;
 			currentTerm->next = makeItem(i * (long long)std::pow(prime, j), 1);
 
 			currentTerm = currentTerm->next;
@@ -673,27 +692,29 @@ std::vector<Polynom> Polynom::factorizeCyclotomicRi(size_t n) {
 		bool factorized = false;
 		j = 0;
 		while (j < prime) {
-			//std::cout << "====\n";
-			//std::cout << polysToFactorize.front().show() << std::endl;
-			//std::cout << riPolynomial.show() << std::endl;
+            //std::cout << "====\n";
+            //std::cout << polysToFactorize.front().show() << std::endl;
+            //std::cout << riPolynomial.show() << std::endl;
 
 			Polynom gcdRi = polysToFactorize.front().gcd(riPolynomial);
 
-			//std::cout << gcdRi.show() << std::endl;
-			//std::cout << "====\n";
+            //std::cout << gcdRi.show() << std::endl;
+            //std::cout << "====\n";
 
 			//check if Ri = 0 (mod Q)
-			if (j == 0 && gcdRi == polysToFactorize.front()) {
+            if (j == 0 && (gcdRi == riPolynomial || gcdRi == polysToFactorize.front())) {
 				factorized = false;
 				break;
 			}
 
 			long long gcdPower = gcdRi.getPolyPower();
-			if (gcdPower == factorPower) {
+            if (gcdPower == factorPower) {
 				factorized = true;
 				gcdRi.normalization();
+                //std::cout << "New factor " << gcdRi.show() << std::endl;
 				factors.push_back(gcdRi);
 			} else if (gcdPower > 0 && gcdPower % factorPower == 0) {
+                //std::cout << "New poly to factorize" << std::endl;
 				factorized = true;
 				polysToFactorize.push_back(gcdRi);
 			}
@@ -702,7 +723,11 @@ std::vector<Polynom> Polynom::factorizeCyclotomicRi(size_t n) {
 			j++;
 		}
 		if (factorized) {
+            //std::cout << "Facrorized!" << std::endl;
 			polysToFactorize.pop_front();
+            //std::cout << "Polys to factorize: " << polysToFactorize.size() << std::endl;
+            //std::cout << "Factors: " << factors.size() << std::endl;
+            //std::cout << "===========================" << std::endl;
 		}
 		i++;
 
@@ -750,7 +775,8 @@ std::vector<Polynom> Polynom::nIrreduciblePolynomials(long long prime, long long
         if ((num % m) == 0) {
             cyclotomic = Polynom::CyclotomicPolynomial(prime, m);
             if (cyclotomic.getPolyPower() < n) continue;
-            temp = cyclotomic.factorizeCyclotomicRi(m);
+
+            temp = cyclotomic.factorizeCyclotomicRi(m, size - result.size());
             for (auto& ir : temp) {
                 if (ir.getPolyPower() == n) {
                     if (result.size() < size) result.push_back(ir);
@@ -807,29 +833,31 @@ Polynom Polynom::pthRoot(Polynom f) {
 std::vector<std::pair<Polynom, long long>> Polynom::squareFreeDecomposition() const {
     std::vector<std::pair<Polynom, long long>> result;
     Polynom polynom(*this);
-    Polynom one(prime, std::vector<long long>{1});
+
     long long s = 1;
     do {
         int j = 1;
         Polynom derivativePolynom = polynom.derivative();
         Polynom gcdPolynom = polynom.gcd(derivativePolynom);
+        gcdPolynom.normalization();
         Polynom g = polynom / gcdPolynom;
-        while (!(g == one)) {
+        while (g.getPolyPower() > 0) {
             polynom = polynom / g;
             Polynom h = polynom.gcd(g);
+            h.normalization();
             Polynom m = g / h;
-            if (!(m == one)) {
+            if (m.getPolyPower() > 0) {
                 std::pair<Polynom, long long> polynomAndPower = { m,j * s };
                 result.push_back(polynomAndPower);
             }
             g = h;
             j++;
         }
-        if (!(polynom == one)) {
+        if (polynom.getPolyPower() > 0) {
             polynom = polynom.pthRoot(polynom);
             s *= prime;
         }
-    } while (!(polynom == one));
+    } while (polynom.getPolyPower() > 0);
     return result;
 }
 
@@ -878,7 +906,7 @@ std::vector<std::pair<std::vector<Polynom>, long long>> Polynom::berlekampAlgori
     }
     auto polynomial_basis = unmultiple_polynomial.getComparisonSystemSolutionBasis();
     if (polynomial_basis.size() == 1) {
-        return std::vector<std::pair<std::vector<Polynom>, long long>>{ { {*this}, 1} };
+        return std::vector<std::pair<std::vector<Polynom>, long long>>{ { { unmultiple_factors[0].first }, unmultiple_factors[0].second } };
     }
     else {
         return factorizeByBasisPolynomials(unmultiple_factors, polynomial_basis);
@@ -906,6 +934,7 @@ std::vector<std::pair<std::vector<Polynom>, long long>> Polynom::factorizeByBasi
                 if (result[i].first[j].getPolyPower() > 1) {
                     for (long long k = 0; k < prime; k++) {
                         temp = result[i].first[j].gcd(basis[basis_element_index] - Polynom{ prime, {k, 0} });
+                        temp.normalization();
                         if (temp.getPolyPower() > 0) {
                             replacement.push_back(temp);
                             current_num_of_factors++;
@@ -913,13 +942,14 @@ std::vector<std::pair<std::vector<Polynom>, long long>> Polynom::factorizeByBasi
                     }
                 }
 
-                if (!replacement.empty()) {
+                if (replacement.size() > 1) {
                     current_num_of_factors--;
                     result[i].first.insert(result[i].first.begin() + j, replacement.begin(), replacement.end());
                     j += replacement.size();
                     result[i].first.erase(result[i].first.begin() + j);
                     if (current_num_of_factors == total_num_of_factors) break;
                 }
+                if (replacement.size() == 1) current_num_of_factors--;
             }
 
             if (current_num_of_factors == total_num_of_factors) break;
@@ -930,21 +960,40 @@ std::vector<std::pair<std::vector<Polynom>, long long>> Polynom::factorizeByBasi
     return result;
 }
 
+std::vector<std::pair<Polynom, long long>> Polynom::sort_polynomials_by_power(std::vector<std::pair<std::vector<Polynom>, long long>> const& polynomials) const {
+    std::vector<std::pair<Polynom, long long>> result;
+
+    for (size_t i = 0; i < polynomials.size(); i++) {
+        for (size_t j = 0; j < polynomials[i].first.size(); j++) {
+            result.push_back({ polynomials[i].first[j], polynomials[i].second });
+        }
+    }
+
+    std::sort(result.begin(), result.end(), [](std::pair<Polynom, long long> const& left, std::pair<Polynom, long long> const& right) { return left.first.getPolyPower() < right.first.getPolyPower(); });
+    return result;
+}
+
 std::string Polynom::berlekampAlgorithm() const {
-    auto unmultipled_polynomial = squareFreeDecomposition();
-    auto result = berlekampAlgorithmMainCase(unmultipled_polynomial);
+    Polynom copy(*this);
+    copy.normalization();
+    auto unmultipled_polynomial = copy.squareFreeDecomposition();
+    auto result = copy.berlekampAlgorithmMainCase(unmultipled_polynomial);
+    auto sorted_result = sort_polynomials_by_power(result);
     std::string result_to_string;
 
-    for (size_t i = 0; i < result.size(); i++) {
-        long long power = result[i].second;
-        for (size_t j = 0; j < result[i].first.size(); j++) {
-            result_to_string.push_back('(');
-            result_to_string += result[i].first[j].show();
-            result_to_string.push_back(')');
-            if (power > 1) result_to_string += "^" + std::to_string(power);
-            if (j != result[i].first.size() - 1) result_to_string += " * ";
-        }
-        if (i != result.size() - 1) result_to_string += " * ";
+    long long main_coefficient = this->getTermKey(this->getPolyPower());
+    if (main_coefficient > 1) {
+        result_to_string = std::to_string(main_coefficient);
+        if (!result.empty()) result_to_string += " * ";
+    }
+
+    for (size_t i = 0; i < sorted_result.size(); i++) {
+        long long power = sorted_result[i].second;
+        result_to_string.push_back('(');
+        result_to_string += sorted_result[i].first.show();
+        result_to_string.push_back(')');
+        if (power > 1) result_to_string += "^" + std::to_string(power);
+        if (i != sorted_result.size() - 1) result_to_string += " * ";
     }
 
     return result_to_string;
